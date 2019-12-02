@@ -1,0 +1,217 @@
+<html>
+  <head>
+    <title>Map</title>
+
+    <script src="https://unpkg.com/deck.gl@^7.0.0/dist.min.js"></script>
+    <script src='https://api.mapbox.com/mapbox-gl-js/v1.4.1/mapbox-gl.js'></script>
+    <link href='https://api.mapbox.com/mapbox-gl-js/v1.4.1/mapbox-gl.css' rel='stylesheet' />
+
+    <style type="text/css">
+      body {
+        font-family: Helvetica, Arial, sans-serif;
+        width: 100vw;
+        height: 100vh;
+        margin: 0;
+      }
+
+      #control-panel {
+        position: absolute;
+        top: 0;
+        left: 0;
+        margin: 12px;
+        padding: 20px;
+        font-size: 12px;
+        line-height: 1.5;
+        z-index: 1;
+        background: rgba(145, 137, 137, 0.8);
+        font-family: Helvetica, Arial, sans-serif;
+        box-shadow: 0 0 4px rgba(0, 0, 0, 0.15);
+      }
+      #map {
+      width: 100vw;
+      height: 100vh;
+    }
+    #tooltip {
+      position: absolute;
+      background: white;
+      margin: 10px;
+      padding: 10px;
+    }
+
+      label {
+        display: inline-block;
+        width: 140px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="control-panel">
+      <div>
+        <label>Radius</label>
+        <input id="radius" type="range" min="10" max="2000" step="5" value="45"></input>
+        <span id="radius-value"></span>
+      </div>
+      <div>
+        <label>Coverage</label>
+        <input id="coverage" type="range" min="0" max="1" step="0.1" value="1"></input>
+        <span id="coverage-value"></span>
+      </div>
+      <div>
+        <label>Upper Percentile</label>
+        <input id="upperPercentile" type="range" min="90" max="100" step="1" value="90"></input>
+        <span id="upperPercentile-value"></span>
+      </div>
+    </div>
+    <div id="tooltip"></div>
+  </body>
+
+  <script type="text/javascript">
+
+    const {DeckGL, HexagonLayer} = deck;
+
+    const deckgl = new DeckGL({
+      mapboxApiAccessToken: 'pk.eyJ1IjoiZGV2bWFtdW4iLCJhIjoiY2szbjRyNmE5MTh5cjNmbWlsdDBvazc0MiJ9.OO8c-YANnmppU7AIbw2TVw',
+      mapStyle: 'mapbox://styles/mapbox/dark-v9',
+      latitude: 36.1164315,
+      longitude: -115.1593261,
+      zoom: 14,
+      minZoom: 5,
+      maxZoom: 25,
+      pitch: 50,
+      controller: true,
+    });
+
+    const OPTIONS = ['radius', 'coverage', 'upperPercentile'];
+
+    const COLOR_RANGE = [
+      [1, 152, 189],
+      [73, 227, 206],
+      [216, 254, 181],
+      [254, 237, 177],
+      [254, 173, 84],
+      [209, 55, 78]
+    ];
+
+    OPTIONS.forEach(key => {
+      document.getElementById(key).oninput = renderLayer;
+    });
+
+    function renderLayer () {
+      const options = {};
+      OPTIONS.forEach(key => {
+        const value = document.getElementById(key).value;
+        document.getElementById(key + '-value').innerHTML = value;
+        options[key] = Number(value);
+      });
+
+      const scatterplot =
+        new ScatterplotLayer({
+          id: "scatter",
+          data: data,
+          opacity: 0.8,
+          filled: true,
+          radiusMinPixels: 3,
+          radiusMaxPixels: 6,
+          getPosition: d => [Number(d.Longitude), Number(d.Latitude)],
+          getFillColor: d =>
+            d.Appreciation.replace("%", "") > 0
+              ? [200, 0, 40, 150]
+              : [255, 140, 0, 100],
+
+          pickable: true,
+          onHover: ({ object, x, y, index }) => {
+            const el = document.getElementsByClassName("deck-tooltip")[0];
+            if (object) {
+              // const { n_killed, incident_id } = object;
+              el.innerHTML = `<p>Longitude: ${data[index]['Longitude']}</p><p>Latitude: ${data[index]['Latitude']}</p><p>Tower: ${data[index]['Tower']}</p><p>Appriciation: ${data[index]['Appreciation']}</p>`;
+              el.style.display = "block";
+              el.style.opacity = 0.9;
+              el.style.left = x + "px";
+              el.style.top = y + "px";
+            } else {
+              el.style.opacity = 0.0;
+            }
+          }
+
+          // onClick: ({ object, x, y }) => {
+          //   window.open(
+          //     `https://www.gunviolencearchive.org/incident/${object.incident_id}`
+          //   );
+          // }
+        });
+
+      const hexagonLayer = new HexagonLayer({
+        colorRange: COLOR_RANGE,
+        id: "hex",
+        data: data,
+        getPosition: d => [Number(d.Longitude), Number(d.Latitude)],
+        getElevationWeight: d => Number(d.Appreciation.replace("%", "")),
+        elevationRange: [0, 50],
+        elevationScale: 10,
+        extruded: true,
+        // radius: 100,
+        opacity: 0.5,
+        // coverage: 0.5,
+        lowerPercentile: 0,
+        // upperPercentile: 500,
+
+        pickable: true,
+        onHover: item => {
+          const { object, x, y, index } = item;
+          // console.log(item);
+          const el = document.getElementsByClassName("deck-tooltip")[0];
+          if (object) {
+            // const { longitude, latitude } = object;
+            el.innerHTML = `<p>Longitude: ${data[index]['Longitude']}</p><p>Latitude: ${data[index]['Latitude']}</p><p>Tower: ${data[index]['Tower']}</p><p>Appriciation: ${data[index]['Appreciation']}</p>`;
+            el.style.display = "block";
+            el.style.opacity = 0.9;
+            el.style.left = x + "px";
+            el.style.top = y + "px";
+            item.color = [255, 140, 0, 100];
+          } else {
+            el.style.opacity = 0.0;
+          }
+        },
+        ...options
+  });
+      
+      
+
+      deckgl.setProps({
+        layers: [scatterplot, hexagonLayer]
+      });
+    }
+
+  
+
+    const url =
+  "https://sheets.googleapis.com/v4/spreadsheets/1nmDC51LMIni1GWL8zeoyAt9GDZUpyMgsTXAJnj9wShs/values/A1:G9999?key=AIzaSyBGnIg8FvCoFnzt6ubeBzu6Pl2WD1VK_1k";
+    const data = [];
+
+    fetch(url).then(res=>res.json()).then(result=>{
+      const rows = result.values;
+    if (!rows.length) {
+      alert("No Data...");
+      return;
+    }
+    const keys = rows[0];
+
+    rows.forEach((row, index) => {
+      if (index === 0) return;
+
+      const obj = {};
+      keys.forEach((key, i) => {
+        obj[key] = row[i];
+      });
+      data.push(obj);
+    });
+    console.log(data);
+    renderLayer();
+    }).catch(err=>{
+      console.log(err)
+      alert("Error occured while getting the data");
+    });
+
+  </script>
+</html>
